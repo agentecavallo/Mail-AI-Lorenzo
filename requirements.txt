@@ -3,3 +3,5 @@ google-generativeai>=0.8.3
 Pillow
 PyPDF2
 st-img-pastebutton
+requests
+beautifulsoup4
