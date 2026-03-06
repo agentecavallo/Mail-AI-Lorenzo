@@ -7,6 +7,8 @@ from PIL import Image
 import PyPDF2
 from st_img_pastebutton import paste
 import io
+import requests
+from bs4 import BeautifulSoup
 
 # --- CONFIGURAZIONE API ---
 try:
@@ -22,17 +24,33 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Key Account Manager AI", page_icon="🛠️", layout="wide")
 
-# Funzione per resettare i campi
+# Funzioni di reset e utilità
 def reset_fields():
     st.session_state.distributore = ""
     st.session_state.bozza = ""
     st.session_state.obiettivo = "Follow up ordine / stato consegna"
 
-# Inizializzazione session state per il reset
 if 'distributore' not in st.session_state: st.session_state.distributore = ""
 if 'bozza' not in st.session_state: st.session_state.bozza = ""
 
-# CSS: Sfondo neutro, bottoni moderni e casella info
+def estrai_testo_url(url):
+    """Funzione che va su internet a leggere il sito del fornitore"""
+    if not url: return ""
+    try:
+        if not url.startswith("http"):
+            url = "https://" + url
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        # Rimuove codice inutile e prende solo il testo leggibile
+        for script in soup(["script", "style"]):
+            script.extract()
+        testo = " ".join(soup.stripped_strings)
+        return testo[:15000] # Limite di sicurezza per non esagerare con i testi
+    except Exception as e:
+        return f"[Nota di sistema: Non sono riuscito a leggere l'URL: {e}]"
+
+# CSS
 st.markdown("""
     <style>
     .main { background-color: #f4f6f9; }
@@ -62,7 +80,6 @@ st.markdown("""
         color: #01579b;
         font-size: 0.95em;
     }
-    /* Rende le etichette (label) più eleganti */
     .st-emotion-cache-16idsys p {
         font-weight: 600;
         color: #2c3e50;
@@ -87,7 +104,7 @@ with st.sidebar:
     if st.button("🗑️ SVUOTA CAMPI"):
         reset_fields()
         st.rerun()
-    st.caption("KAM Assistant v7.0 - Utensiltecnica")
+    st.caption("KAM Assistant v8.0 - Utensiltecnica")
 
 # --- AREA PRINCIPALE ---
 def get_image_base64(path):
@@ -129,17 +146,17 @@ with st.container(border=True):
             "Sollecito amministrativo / verifica pagamenti"
         ], key="obiettivo")
 
-    bozza = st.text_area("✍️ Appunti veloci (dati tecnici, nr. ordine, cifre, ecc.)", key="bozza", placeholder="Scrivi qui i dettagli dell'ordine o il problema da risolvere...", height=150)
+    bozza = st.text_area("✍️ Appunti veloci (dati tecnici, nr. ordine, cifre, ecc.)", key="bozza", placeholder="Scrivi qui i dettagli dell'ordine o il problema da risolvere...", height=100)
 
-# --- BLOCCO 2: ALLEGATI ---
+# --- BLOCCO 2: RICHIESTA DEL CLIENTE ---
 with st.container(border=True):
-    st.markdown("### 📎 Materiale di Supporto (Opzionale)")
-    st.caption("Fornisci al sistema un documento da leggere o uno screenshot a cui rispondere.")
+    st.markdown("### 📥 Richiesta del Cliente (Opzionale)")
+    st.caption("Fornisci al sistema la richiesta del cliente (uno screenshot o un documento PDF a cui rispondere).")
     
     col_att1, col_att2 = st.columns(2)
     
     with col_att1:
-        st.markdown("**📸 1. Incolla uno Screenshot**")
+        st.markdown("**📸 1. Incolla Screenshot**")
         pasted_image_data = paste(label="📋 Clicca e Consenti, poi premi CTRL+V", key="image_clipboard")
         pasted_image = None
         if pasted_image_data is not None:
@@ -153,6 +170,19 @@ with st.container(border=True):
         st.markdown("**📁 2. Carica un File**")
         uploaded_file = st.file_uploader("PDF o Immagine (Sfoglia dal PC)", type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed")
 
+# --- BLOCCO 3: FONTE AUTOREVOLE (FINESTRA A SCOMPARSA) ---
+with st.expander("📚 Fonte Autorevole / Dati Fornitore (Opzionale) - Clicca per espandere"):
+    st.info("💡 Inserisci qui manuali, cataloghi o link al fornitore. L'AI leggerà questi dati per formulare una risposta tecnica precisissima.")
+    
+    col_fonte1, col_fonte2 = st.columns(2)
+    
+    with col_fonte1:
+        url_fornitore = st.text_input("🌐 Incolla URL del Fornitore/Prodotto", placeholder="Es: https://www.usag.it/...")
+        
+    with col_fonte2:
+        file_fonte = st.file_uploader("📄 Carica Catalogo/Scheda Tecnica (PDF)", type=['pdf'], key="upload_fonte")
+
+
 # --- FUNZIONE OUTLOOK ---
 def create_outlook_link(subject, body):
     clean_body = body.replace("#", "").replace("*", "") 
@@ -162,8 +192,8 @@ def create_outlook_link(subject, body):
 
 # --- BOTTONE GENERAZIONE ---
 if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
-    if distributore and (bozza or uploaded_file is not None or pasted_image is not None):
-        with st.spinner('Elaboro i dati tecnici e redigo le varianti...'):
+    if distributore and (bozza or uploaded_file is not None or pasted_image is not None or url_fornitore or file_fonte):
+        with st.spinner('Lavoro sui dati, leggo i manuali e redigo le varianti...'):
             prompt = f"""
             Sei il Responsabile Contatti con i Key Account della 'Cipriani Utensiltecnica' (situata a Pomezia, RM). 
             Lavori dall'ufficio (back-office) e gestisci le relazioni commerciali, operative e tecniche con i grandi clienti nel settore dell'utensileria. 
@@ -176,16 +206,32 @@ if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
             4. Lunghezza: {lunghezza.upper()}.
             5. Profilo interlocutore: {profilo}. 
             6. Obiettivo della mail: {obiettivo}.
-            7. Note e dettagli da inserire: {bozza}.
-            8. FIRMA: NESSUNA firma o segnaposto tipo [Il Tuo Nome] o [Tuo Ruolo]. Chiudi solo con i saluti adeguati.
+            7. Note e dettagli tuoi: {bozza}.
+            8. FIRMA: NESSUNA firma o segnaposto tipo [Il Tuo Nome] o [Tuo Ruolo]. Chiudi solo con i saluti.
             9. OGGETTO: NON scrivere l'oggetto nel testo della mail.
             10. TITOLI: NON scrivere MAI "VERSIONE 1", "Variante", "Taglio professionale" o altre intestazioni. Inizia subito con il saluto al cliente.
             """
             
+            # Preparazione dati fonte (Catalogo o Link Fornitore)
+            dati_extra = ""
+            if url_fornitore:
+                testo_sito = estrai_testo_url(url_fornitore)
+                dati_extra += f"\n[DATI DAL SITO WEB FORNITORE]:\n{testo_sito}\n"
+                
+            if file_fonte is not None:
+                pdf_reader = PyPDF2.PdfReader(file_fonte)
+                dati_extra += "\n[DATI DAL CATALOGO/MANUALE PDF FORNITORE]:\n"
+                for page in pdf_reader.pages:
+                    dati_extra += page.extract_text() + "\n"
+                    
+            if dati_extra:
+                prompt += f"\n\n11. FONTE AUTOREVOLE / DATI TECNICI DA USARE: Basati ASSOLUTAMENTE su queste informazioni reali del fornitore per dare supporto al cliente o formulare l'offerta:\n{dati_extra}\n"
+            
             contents = []
             
+            # Aggiunta Immagini/PDF del cliente
             if pasted_image is not None:
-                prompt += "\n\n11. SCREENSHOT ALLEGATO: Ti ho fornito un'immagine con un messaggio scritto o un dettaglio tecnico. La tua email DEVE ESSERE UNA RISPOSTA DIRETTA e pertinente a quanto mostrato nello screenshot, integrando le mie note se presenti."
+                prompt += "\n\n12. RICHIESTA CLIENTE (SCREENSHOT ALLEGATO): L'immagine allegata contiene la richiesta del cliente. Rispondi in modo pertinente a quanto mostrato."
                 contents = [prompt, pasted_image]
                 
             elif uploaded_file is not None:
@@ -195,11 +241,11 @@ if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
                     testo_pdf = ""
                     for page in pdf_reader.pages:
                         testo_pdf += page.extract_text() + "\n"
-                    prompt += f"\n\n11. DOCUMENTO ALLEGATO: Ti ho fornito un PDF di cui ho estratto il testo qui sotto. Leggilo attentamente e formula un'email di risposta o gestione pertinente, integrando le mie note se presenti.\n[TESTO PDF]:\n{testo_pdf}"
+                    prompt += f"\n\n12. RICHIESTA CLIENTE (PDF ALLEGATO): Testo del documento inviato dal cliente:\n{testo_pdf}"
                     contents = [prompt]
                 else:
                     img = Image.open(uploaded_file)
-                    prompt += "\n\n11. SCREENSHOT ALLEGATO: Ti ho fornito un'immagine. La tua email DEVE ESSERE UNA RISPOSTA DIRETTA e pertinente a quanto mostrato nello screenshot, integrando le mie note se presenti."
+                    prompt += "\n\n12. RICHIESTA CLIENTE (SCREENSHOT ALLEGATO): L'immagine allegata contiene la richiesta del cliente. Rispondi in modo pertinente."
                     contents = [prompt, img]
                     
             else:
@@ -232,4 +278,4 @@ if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
             except Exception as e:
                 st.error(f"Errore di connessione o generazione: {e}")
     else:
-        st.warning("⚠️ Compila il nome dell'Azienda e inserisci almeno una bozza di testo o un file allegato (Immagine/PDF)!")
+        st.warning("⚠️ Compila il nome dell'Azienda e inserisci almeno un dato (bozza, allegato cliente, link fornitore o catalogo)!")
