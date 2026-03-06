@@ -4,7 +4,9 @@ import urllib.parse
 import os
 import base64
 from PIL import Image
-import PyPDF2  # <-- NUOVA LIBRERIA PER LEGGERE I PDF
+import PyPDF2
+from st_img_pastebutton import paste  # <-- LIBRERIA MAGICA PER INCOLLARE
+import io
 
 # --- CONFIGURAZIONE API ---
 try:
@@ -78,7 +80,7 @@ with st.sidebar:
     if st.button("🗑️ SVUOTA CAMPI"):
         reset_fields()
         st.rerun()
-    st.caption("KAM Assistant v5.0 - Utensiltecnica")
+    st.caption("KAM Assistant v6.0 - Utensiltecnica")
 
 # --- AREA PRINCIPALE ---
 def get_image_base64(path):
@@ -98,7 +100,7 @@ if img_b64:
 else:
     st.markdown("<h1 style='margin-bottom: 20px;'>🛠️ Generatore Mail KAM</h1>", unsafe_allow_html=True)
 
-st.markdown('<div class="hint-box">👈 <b>Usa la barra laterale a sinistra per impostare il tono e il destinatario!</b></div>', unsafe_allow_html=True)
+st.markdown('<div class="hint-box">👈 <b>Imposta il tono a sinistra, carica appunti o immagini a destra!</b></div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 1])
 
@@ -119,8 +121,24 @@ with col1:
 with col2:
     bozza = st.text_area("📝 Appunti veloci (dati tecnici, nr. ordine, ecc.)", key="bozza", placeholder="Scrivi qui i dettagli dell'ordine, l'articolo o il problema da risolvere...", height=130)
     
-    # CAMPO UPLOAD IMMAGINE E PDF (Ora suggerisce anche il copia-incolla)
-    uploaded_file = st.file_uploader("📎 Trascina un file, INCOLLA (CTRL+V) uno screen, o carica un PDF", type=['png', 'jpg', 'jpeg', 'pdf'])
+    st.markdown("<br><b>📎 Allegati (Opzionale)</b>", unsafe_allow_html=True)
+    
+    # 1. IL NUOVO BOTTONE MAGICO PER GLI SCREENSHOT
+    st.caption("Hai fatto uno screenshot (Stamp / Win+Shift+S)? Clicca qui sotto:")
+    pasted_image_data = paste(label="📋 INCOLLA DA APPUNTI", key="image_clipboard")
+    
+    # 2. CARICAMENTO NORMALE PER PDF o FILE SALVATI
+    st.caption("Oppure carica un file già salvato sul PC (Immagine o PDF):")
+    uploaded_file = st.file_uploader("Trascina qui o sfoglia", type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed")
+
+    # Gestione dell'immagine incollata dal bottone magico
+    pasted_image = None
+    if pasted_image_data is not None:
+        header, encoded = pasted_image_data.split(",", 1)
+        binary_data = base64.b64decode(encoded)
+        pasted_image = Image.open(io.BytesIO(binary_data))
+        st.success("✅ Screenshot catturato con successo!")
+        st.image(pasted_image, width=150)
 
 def create_outlook_link(subject, body):
     clean_body = body.replace("#", "").replace("*", "") 
@@ -131,7 +149,7 @@ def create_outlook_link(subject, body):
 st.write("") 
 
 if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
-    if distributore and (bozza or uploaded_file is not None):
+    if distributore and (bozza or uploaded_file is not None or pasted_image is not None):
         with st.spinner('Elaboro i dati tecnici e redigo le varianti...'):
             prompt = f"""
             Sei il Responsabile Contatti con i Key Account della 'Cipriani Utensiltecnica' (situata a Pomezia, RM). 
@@ -153,37 +171,36 @@ if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
             
             contents = []
             
-            # Gestione del file allegato (Immagine o PDF)
-            if uploaded_file is not None:
-                file_extension = uploaded_file.name.split('.')[-1].lower()
+            # 1. Se hai incollato uno screenshot con il bottone magico:
+            if pasted_image is not None:
+                prompt += "\n\n11. SCREENSHOT ALLEGATO: Ti ho fornito un'immagine con un messaggio scritto o un dettaglio tecnico. La tua email DEVE ESSERE UNA RISPOSTA DIRETTA e pertinente a quanto mostrato nello screenshot, integrando le mie note se presenti."
+                contents = [prompt, pasted_image]
                 
+            # 2. Se hai caricato un file/PDF tradizionale:
+            elif uploaded_file is not None:
+                file_extension = uploaded_file.name.split('.')[-1].lower()
                 if file_extension == 'pdf':
-                    # Logica per leggere il PDF
                     pdf_reader = PyPDF2.PdfReader(uploaded_file)
                     testo_pdf = ""
                     for page in pdf_reader.pages:
                         testo_pdf += page.extract_text() + "\n"
-                        
                     prompt += f"\n\n11. DOCUMENTO ALLEGATO: Ti ho fornito un PDF di cui ho estratto il testo qui sotto. Leggilo attentamente e formula un'email di risposta o gestione pertinente, integrando le mie note se presenti.\n[TESTO PDF]:\n{testo_pdf}"
                     contents = [prompt]
-                
                 else:
-                    # Logica per l'Immagine/Screenshot
-                    prompt += "\n\n11. SCREENSHOT ALLEGATO: Ti ho fornito un'immagine con un messaggio scritto o un dettaglio tecnico. La tua email DEVE ESSERE UNA RISPOSTA DIRETTA e pertinente a quanto mostrato nello screenshot, integrando le mie note se presenti."
                     img = Image.open(uploaded_file)
+                    prompt += "\n\n11. SCREENSHOT ALLEGATO: Ti ho fornito un'immagine con un messaggio scritto o un dettaglio tecnico. La tua email DEVE ESSERE UNA RISPOSTA DIRETTA e pertinente a quanto mostrato nello screenshot, integrando le mie note se presenti."
                     contents = [prompt, img]
+                    
+            # 3. Solo testo:
             else:
                 contents = [prompt]
             
             prompt += "\n\nIMPORTANTE: Separa le due mail SOLO con la stringa esatta: SEPARA_QUI"
-            # Assicuriamoci che il prompt aggiornato (se c'è solo testo o PDF) sia il primo elemento di contents
-            if uploaded_file is None or file_extension == 'pdf':
-                contents = [prompt]
-            else:
-                contents[0] = prompt
             
             try:
-                # Chiamata all'API con contenuti multipli (testo o testo+immagine)
+                # Assicuriamoci che il prompt sia aggiornato nei contents
+                contents[0] = prompt
+                
                 response = model.generate_content(contents).text
                 
                 if "SEPARA_QUI" in response:
