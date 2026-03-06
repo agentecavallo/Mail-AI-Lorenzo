@@ -129,7 +129,7 @@ with st.container(border=True):
             "Sollecito amministrativo / verifica pagamenti"
         ], key="obiettivo")
 
-    bozza = st.text_area("✍️ Appunti veloci (dati tecnici, nr. ordine, cifre, ecc.)", key="bozza", placeholder="Scrivi qui i dettagli dell'ordine o il problema da risolvere...", height=200)
+    bozza = st.text_area("✍️ Appunti veloci (dati tecnici, nr. ordine, cifre, ecc.)", key="bozza", placeholder="Scrivi qui i dettagli dell'ordine o il problema da risolvere...", height=150)
 
 # --- BLOCCO 2: ALLEGATI ---
 with st.container(border=True):
