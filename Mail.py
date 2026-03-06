@@ -104,7 +104,7 @@ with st.sidebar:
     if st.button("🗑️ SVUOTA CAMPI"):
         reset_fields()
         st.rerun()
-    st.caption("KAM Assistant v8.0 - Utensiltecnica")
+    st.caption("KAM Assistant v8.5 - Utensiltecnica")
 
 # --- AREA PRINCIPALE ---
 def get_image_base64(path):
@@ -128,7 +128,7 @@ st.markdown('<div class="hint-box">👈 <b>Usa il menu a sinistra per calibrare 
 
 # --- BLOCCO 1: DETTAGLI COMUNICAZIONE ---
 with st.container(border=True):
-    st.markdown("### 📝 Dettagli Comunicazione")
+    st.markdown("### 📝 Dettagli Principali")
     
     col_top1, col_top2 = st.columns(2)
     with col_top1:
@@ -148,10 +148,9 @@ with st.container(border=True):
 
     bozza = st.text_area("✍️ Appunti veloci (dati tecnici, nr. ordine, cifre, ecc.)", key="bozza", placeholder="Scrivi qui i dettagli dell'ordine o il problema da risolvere...", height=100)
 
-# --- BLOCCO 2: RICHIESTA DEL CLIENTE ---
-with st.container(border=True):
-    st.markdown("### 📥 Richiesta del Cliente (Opzionale)")
-    st.caption("Fornisci al sistema la richiesta del cliente (uno screenshot o un documento PDF a cui rispondere).")
+# --- BLOCCO 2: RICHIESTA DEL CLIENTE (FINESTRA A SCOMPARSA) ---
+with st.expander("📥 Richiesta del Cliente (Opzionale) - Clicca per allegare screenshot o PDF"):
+    st.info("Fornisci al sistema la richiesta del cliente (uno screenshot o un documento a cui rispondere).")
     
     col_att1, col_att2 = st.columns(2)
     
@@ -172,7 +171,7 @@ with st.container(border=True):
 
 # --- BLOCCO 3: FONTE AUTOREVOLE (FINESTRA A SCOMPARSA) ---
 with st.expander("📚 Fonte Autorevole / Dati Fornitore (Opzionale) - Clicca per espandere"):
-    st.info("💡 Inserisci qui manuali, cataloghi o link al fornitore. L'AI leggerà questi dati per formulare una risposta tecnica precisissima.")
+    st.info("💡 Inserisci qui link o cataloghi. L'AI leggerà questi dati per formulare una risposta tecnica precisissima. Se non metti nulla, risponderà in autonomia usando le sue conoscenze tecniche.")
     
     col_fonte1, col_fonte2 = st.columns(2)
     
@@ -193,7 +192,7 @@ def create_outlook_link(subject, body):
 # --- BOTTONE GENERAZIONE ---
 if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
     if distributore and (bozza or uploaded_file is not None or pasted_image is not None or url_fornitore or file_fonte):
-        with st.spinner('Lavoro sui dati, leggo i manuali e redigo le varianti...'):
+        with st.spinner('Lavoro sui dati, redigo le varianti...'):
             prompt = f"""
             Sei il Responsabile Contatti con i Key Account della 'Cipriani Utensiltecnica' (situata a Pomezia, RM). 
             Lavori dall'ufficio (back-office) e gestisci le relazioni commerciali, operative e tecniche con i grandi clienti nel settore dell'utensileria. 
@@ -225,13 +224,13 @@ if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
                     dati_extra += page.extract_text() + "\n"
                     
             if dati_extra:
-                prompt += f"\n\n11. FONTE AUTOREVOLE / DATI TECNICI DA USARE: Basati ASSOLUTAMENTE su queste informazioni reali del fornitore per dare supporto al cliente o formulare l'offerta:\n{dati_extra}\n"
+                prompt += f"\n\n👉 FONTE AUTOREVOLE / DATI TECNICI DA USARE: Basati ASSOLUTAMENTE su queste informazioni reali del fornitore per dare supporto al cliente o formulare l'offerta:\n{dati_extra}\n"
             
             contents = []
             
             # Aggiunta Immagini/PDF del cliente
             if pasted_image is not None:
-                prompt += "\n\n12. RICHIESTA CLIENTE (SCREENSHOT ALLEGATO): L'immagine allegata contiene la richiesta del cliente. Rispondi in modo pertinente a quanto mostrato."
+                prompt += "\n\n👉 RICHIESTA CLIENTE (SCREENSHOT ALLEGATO): L'immagine allegata contiene la richiesta del cliente. Rispondi in modo pertinente a quanto mostrato, unendo le mie note se ci sono."
                 contents = [prompt, pasted_image]
                 
             elif uploaded_file is not None:
@@ -241,11 +240,11 @@ if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
                     testo_pdf = ""
                     for page in pdf_reader.pages:
                         testo_pdf += page.extract_text() + "\n"
-                    prompt += f"\n\n12. RICHIESTA CLIENTE (PDF ALLEGATO): Testo del documento inviato dal cliente:\n{testo_pdf}"
+                    prompt += f"\n\n👉 RICHIESTA CLIENTE (PDF ALLEGATO): Testo del documento inviato dal cliente a cui devi rispondere:\n{testo_pdf}"
                     contents = [prompt]
                 else:
                     img = Image.open(uploaded_file)
-                    prompt += "\n\n12. RICHIESTA CLIENTE (SCREENSHOT ALLEGATO): L'immagine allegata contiene la richiesta del cliente. Rispondi in modo pertinente."
+                    prompt += "\n\n👉 RICHIESTA CLIENTE (SCREENSHOT ALLEGATO): L'immagine allegata contiene la richiesta del cliente. Rispondi in modo pertinente unendo le mie note."
                     contents = [prompt, img]
                     
             else:
