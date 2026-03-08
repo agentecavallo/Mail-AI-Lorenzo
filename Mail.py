@@ -18,8 +18,8 @@ except Exception as e:
     st.error("Configura GEMINI_API_KEY nei Secrets di Streamlit!")
     st.stop()
 
-# Modello Gemini 2.5 Flash
-model = genai.GenerativeModel('gemini-2.5-flash')
+# Motore AGGIORNATO: Gemini 3.1 Flash-Lite (Super veloce, limiti più alti)
+model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
 
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Key Account Manager AI", page_icon="🛠️", layout="wide")
@@ -104,7 +104,7 @@ with st.sidebar:
     if st.button("🗑️ SVUOTA CAMPI"):
         reset_fields()
         st.rerun()
-    st.caption("KAM Assistant v8.5 - Utensiltecnica")
+    st.caption("KAM Assistant v9.0 - 3.1 Flash-Lite")
 
 # --- AREA PRINCIPALE ---
 def get_image_base64(path):
@@ -192,7 +192,7 @@ def create_outlook_link(subject, body):
 # --- BOTTONE GENERAZIONE ---
 if st.button("🚀 GENERA VERSIONI STRATEGICHE"):
     if distributore and (bozza or uploaded_file is not None or pasted_image is not None or url_fornitore or file_fonte):
-        with st.spinner('Lavoro sui dati, redigo le varianti...'):
+        with st.spinner('Lavoro sui dati con Gemini 3.1 Flash-Lite, redigo le varianti...'):
             prompt = f"""
             Sei il Responsabile Contatti con i Key Account della 'Cipriani Utensiltecnica' (situata a Pomezia, RM). 
             Lavori dall'ufficio (back-office) e gestisci le relazioni commerciali, operative e tecniche con i grandi clienti nel settore dell'utensileria. 
